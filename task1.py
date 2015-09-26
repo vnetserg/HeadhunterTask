@@ -1,14 +1,21 @@
 #!/usr/bin/python3.4
 
-import random
-import math, argparse
+import math, random, argparse
 from queue import Queue, PriorityQueue
 
 class KdTree:
+    '''
+        Класс, реализующий структуру данных Kd-Tree.
+    '''
+
     def __init__(self):
-        self.root = None
+        self.root = None # корневой узел дерева
 
     def addPoint(self, point):
+        '''
+            Добавить точку в структуру данных. Аргументы:
+                point - кортеж координат (x,y)
+        '''
         if self.root == None:
             self.root = Node(point)
         else:
@@ -19,14 +26,27 @@ class KdTree:
             new.radius = distance
 
     def getRadiusAndNeighbors(self, point):
+        '''
+            Вернуть радиус и число соседей заданной точки.
+            Аргументы:
+                point - кортеж координат (x,y)
+        '''
         node = self._findNode(point)
         if node.point != point:
             raise ValueError("Point not in tree")
-        all_points = self._rangeSearch(Rectangle.centeredIn(point, 4*node.radius, 4*node.radius))
-        neighbors = [point for point in all_points if node.radius <= node.distanceTo(point) <= 2*node.radius]
+        all_points = self._rangeSearch(Rectangle.centeredIn(
+            point, 4*node.radius, 4*node.radius))
+        neighbors = [point for point in all_points
+            if node.radius <= node.distanceTo(point) <= 2*node.radius]
         return node.radius, len(neighbors)
 
     def _findNode(self, point):
+        '''
+            Если точка есть в дереве, найти её узел. Если точки
+            нет, найти родительский узел, после которого данная
+            точка должна быть вставлена. Аргументы:
+                point - кортеж координат (x,y)
+        '''
         if self.root is None:
             raise ValueError("No nodes to search")
         node = self.root
@@ -39,14 +59,26 @@ class KdTree:
             node = next_node
 
     def _closestNeighbor(self, point):
+        '''
+            Найти ближайщего соседа данной точки. Аргументы:
+                point - кортеж координат (x,y)
+        '''
         if self.root is None:
             raise ValueError("No nodes to search")
+
+        # Начальное приближение - корневой узел:
         min_distance = self.root.distanceTo(point)
         min_node = self.root
+
+        # Формируем приоритетную очередь по принципу "чем ближе
+        # прямоугольник узла к заданной точке, тем приоритетнее"
         queue = PriorityQueue()
         queue.put((0, self.root))
         while not queue.empty():
             prior, node = queue.get()
+            # Условие обрезания ветви - если уже известна точка,
+            # которая ближе к заданной точке, чем прямоугольник
+            # узла:
             if node.rect.distanceTo(point) > min_distance:
                 continue
             for child in (node.left, node.right):
@@ -60,9 +92,15 @@ class KdTree:
         return min_node, min_distance
 
     def _rangeSearch(self, rect):
-        queue = Queue()
+        '''
+            Поиск всех точек, лежащих в прямоугольном диапазоне.
+            Аргементы:
+                rect - объект Retctangle
+        '''
+        queue = Queue() # очередь узлов, в потомках которых
+                        # потенциально есть искомые точки
         queue.put(self.root)
-        result = []
+        result = [] # список найденных точек
         while not queue.empty():
             node = queue.get()
             if rect.hasInside(node.point):
@@ -73,7 +111,16 @@ class KdTree:
         return result
 
 class Node:
+    '''
+        Класс, реулизующий узел структуры данных Kd-Tree.
+    '''
     def __init__(self, point, coord=0, rect=None):
+        '''
+            point - кортеж координат (x,y)
+            coord - координата разбиения потомков: 0 - х, 1 - у
+            rect  - прямоугольник, в котором лежат все потомки
+                    данного узла
+        '''
         self.point = point
         self.coord = coord
         if rect is not None:
@@ -85,11 +132,23 @@ class Node:
         self.radius = None
     
     def next(self, point):
+        '''
+            Вернуть следующий узел, в потомках которого может
+            находиться данная точка. Вернуть None, если
+            соответствующий узел ещё не существует. Аргументы:
+                point - кортеж координат (x,y)
+        '''
+        assert self.rect.hasInside(point)
         if point[self.coord] < self.point[self.coord]:
             return self.left
         return self.right
 
     def addLeaf(self, point):
+        '''
+            Добавить точку как дочерний узел и вернуть добавленный
+            узел. Аргументы:
+                point - кортеж координат (x,y)
+        '''
         ind = int(point[self.coord] >= self.point[self.coord])
         rect = self.rect.split(self.point[self.coord], coord=self.coord)[ind]
         leaf = Node(point, (self.coord+1)%2, rect=rect)
@@ -102,23 +161,51 @@ class Node:
         return leaf
 
     def distanceTo(self, point):
+        '''
+            Вернуть расстояние от точки узла до заданной точки.
+            Аргументы:
+                point - кортеж координат (x,y) либо объект Node
+        '''
         if isinstance(point, Node):
             point = point.point
         return math.sqrt((self.point[0]-point[0])**2 + (self.point[1]-point[1])**2)
 
 class Rectangle:
+    '''
+        Класс, реализующий прямоугольную область на плоскости.
+        Область может быть ограничена менее, чем с четырёх сторон.
+    '''
     def __init__(self, coords=None):
+        '''
+            coords - список отрезков, ограничивающих область
+                     по каждой координате: [(x1,x2), (y1,y2)].
+                     None вместо координаты означает отсутствие
+                     соответствюущего ограничения.
+        '''
         if coords is not None:
             self.coords = coords
         else:
+            # Бесконечный прямоугольник:
             self.coords = [(None, None), (None, None)]
 
     @classmethod
     def centeredIn(cls, center, width, height):
+        '''
+            Вернуть прямоугольник с центром в center, шириной
+            width и высотой height. Аргументы:
+                point  - кортеж координат (x,y)
+                width  - ширина прямоугольника
+                height - высотя прямоугольника
+        '''
         return cls([(center[0]-width/2, center[0]+width/2),
                        (center[1]-height/2, center[1]+height/2)])
 
     def distanceTo(self, point):
+        '''
+            Вернуть кратчайшее расстояние от заданной точки
+            до данного прямоугольника. Аргументы:
+                point - кортеж координат (x,y)
+        '''
         if self.coords[0][0] is not None and point[0] < self.coords[0][0]:
             x = self.coords[0][0]
         elif self.coords[0][1] is not None and self.coords[0][1] < point[0]:
@@ -134,6 +221,17 @@ class Rectangle:
         return math.sqrt((point[0]-x)**2 + (point[1]-y)**2)
 
     def intersectsWith(self, rect):
+        '''
+            Вернуть True, если прямоугольники пересекается,
+            и False в противном случае. Аргументы:
+                rect - объект Rectangle
+        '''
+        # Специальный случай - два бесконечных прямоугольника:
+        is_infinite = lambda rect: not any(any(crd for crd in pair) for pair in rect.coords)
+        if is_infinite(self) and is_infinite(rect):
+            return True
+        # Общий случай - прямоугольники пересекаются, если угол
+        # одного из них лежит внутри другого:
         for corner in self._corners():
             if rect.hasInside(corner):
                 return True
@@ -143,6 +241,11 @@ class Rectangle:
         return False
 
     def hasInside(self, point):
+        '''
+            Вернуть True, если данная точка находится внутри
+            прямоугольника, иначе False. Аргументы:
+                point - кортеж координат (x,y)
+        '''
         for coord in range(2):
             if self.coords[coord][0] is not None and point[coord] < self.coords[coord][0]:
                 return False
@@ -151,6 +254,11 @@ class Rectangle:
         return True
 
     def split(self, value, coord):
+        '''
+            Вернуть разбиение прямоугольника на два. Аргументы:
+                value - значение координаты разбиения
+                coord - номер координаты разбиения
+        '''
         assert self.coords[coord][0] is None or self.coords[coord][0] <= value
         assert self.coords[coord][1] is None or value <= self.coords[coord][1]
         r1 = Rectangle([self.coords[crd] if crd != coord
@@ -160,6 +268,9 @@ class Rectangle:
         return r1, r2
 
     def _corners(self):
+        '''
+            Вернуть все углы данного прямоугольника.
+        '''
         for x in self.coords[0]:
             if x is None: continue
             for y in self.coords[1]:
@@ -167,6 +278,11 @@ class Rectangle:
                 yield (x, y)
 
 def parse_file(file):
+    '''
+        Прочитать файл и вернуть список точек, в нём указанных.
+        Если в процессе чтения произошли ошибки, напечатать
+        сообщения об ошибках и вернуть None.
+    '''
     with open(file, "r") as f:
         lines = f.readlines()
     try:
@@ -182,6 +298,7 @@ def parse_file(file):
     return res
 
 def main():
+    # Точка входа программы
     parser = argparse.ArgumentParser()
     parser.add_argument("file", help="file with list of points", type=str)
     args = parser.parse_args()
