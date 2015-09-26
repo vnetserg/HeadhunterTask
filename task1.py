@@ -1,5 +1,6 @@
 #!/usr/bin/python3.4
 
+import random
 import math, argparse
 from queue import Queue, PriorityQueue
 
@@ -19,8 +20,6 @@ class KdTree:
 
     def getRadiusAndNeighbors(self, point):
         node = self._findNode(point)
-        #print("Searching point: {}\nNode point: {}".format(point, node.point))
-        #print("Left: {}\nRight: {}".format(node.left, node.right))
         if node.point != point:
             raise ValueError("Point not in tree")
         all_points = self._rangeSearch(Rectangle.centeredIn(point, 4*node.radius, 4*node.radius))
@@ -92,7 +91,7 @@ class Node:
 
     def addLeaf(self, point):
         ind = int(point[self.coord] >= self.point[self.coord])
-        rect = self.rect.split(point[self.coord], coord=self.coord)[ind]
+        rect = self.rect.split(self.point[self.coord], coord=self.coord)[ind]
         leaf = Node(point, (self.coord+1)%2, rect=rect)
         if ind == 0:
             assert self.left is None
@@ -190,9 +189,11 @@ def main():
     if not points:
         return
     tree = KdTree()
+    random.seed("TrFtqH1MGAEZigu5") # для воспроизводимости
+    random.shuffle(points) # чтобы иметь статистически сбалансированное дерево
     for point in points:
         tree.addPoint(point)
-    for point in points:
+    for point in sorted(points):
         print("{}: radius {}, neighbors {}".format(point, *tree.getRadiusAndNeighbors(point)))
 
 if __name__ == "__main__":
