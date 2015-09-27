@@ -1,5 +1,29 @@
 #!/usr/bin/python3.4
 
+'''
+    Файл с решением первой задачи.
+
+    ЗАДАЧА:
+    Даны N точек на плоскости. Назовём расстояние от точки A
+    до ближайщей к ней точки B "радиусом" точки A. "Соседями"
+    точки A будем называть все точки, лежащие в пределах
+    двойного радиуса от неё включительно.
+    Для каждой точки из заданного набора определите её радиус
+    и количество соседей.
+
+    ФОРМАТ ВХОДНЫХ ДАННЫХ:
+    Первый и единственный аргумент программы - путь к файлу,
+    в котором лежит список точек.
+    Формат файла: координаты точки должны быть указаны
+    через пробел, каждая точка на отдельной строке.
+
+    ФОРМАТ ВЫХОДНЫХ ДАННЫХ:
+    Для каждой точки в стандартный вывод печатается строка формата:
+    (x, y): radius {float}, neighbors {int}
+
+    Описание алгоритма решения приведено в README.
+'''
+
 import math, random, argparse
 from queue import Queue, PriorityQueue
 
@@ -94,8 +118,8 @@ class KdTree:
     def _rangeSearch(self, rect):
         '''
             Поиск всех точек, лежащих в прямоугольном диапазоне.
-            Аргементы:
-                rect - объект Retctangle
+            Аргументы:
+                rect - объект Rectangle
         '''
         queue = Queue() # очередь узлов, в потомках которых
                         # потенциально есть искомые точки
@@ -114,6 +138,7 @@ class Node:
     '''
         Класс, реулизующий узел структуры данных Kd-Tree.
     '''
+
     def __init__(self, point, coord=0, rect=None):
         '''
             point - кортеж координат (x,y)
@@ -127,9 +152,9 @@ class Node:
             self.rect = rect
         else:
             self.rect = Rectangle() # бесконечный прямоугольник
-        self.left = None
-        self.right = None
-        self.radius = None
+        self.left = None # левый дочерний узел
+        self.right = None # правый дочерний узел
+        self.radius = None # радиус узла (задаётся на уровне Kd-Tree)
     
     def next(self, point):
         '''
@@ -183,6 +208,10 @@ class Rectangle:
                      соответствюущего ограничения.
         '''
         if coords is not None:
+            for pair in coords:
+                assert len(pair) == 2
+                if all(crd is not None for crd in pair):
+                    assert pair[0] <= pair[1]
             self.coords = coords
         else:
             # Бесконечный прямоугольник:
@@ -195,7 +224,7 @@ class Rectangle:
             width и высотой height. Аргументы:
                 point  - кортеж координат (x,y)
                 width  - ширина прямоугольника
-                height - высотя прямоугольника
+                height - высота прямоугольника
         '''
         return cls([(center[0]-width/2, center[0]+width/2),
                        (center[1]-height/2, center[1]+height/2)])
@@ -305,9 +334,9 @@ def main():
     points = parse_file(args.file)
     if not points:
         return
-    tree = KdTree()
     random.seed("TrFtqH1MGAEZigu5") # для воспроизводимости
     random.shuffle(points) # чтобы иметь статистически сбалансированное дерево
+    tree = KdTree()
     for point in points:
         tree.addPoint(point)
     for point in sorted(points):
