@@ -71,54 +71,47 @@ class KdTree:
         if self.root is None:
             raise ValueError("No nodes to search")
         node = self.root
-        while 1:
+        while node.next(point) is not None:
             if node.point == point:
                 return node
-            next_node = node.next(point)
-            if next_node is None:
-                return node
-            node = next_node
+            node = node.next(point)
+        return node
 
     def _closestNeighbor(self, point):
         '''
-            Найти ближайщего соседа данной точки. Аргументы:
+            Найти ближайщего соседа данной точки. Если
+            узел с координатами этой точки есть в дереве,
+            при поиске соседа он игнорируется. Аргументы:
                 point - кортеж координат (x,y)
         '''
-        if self.root is None:
-            raise ValueError("No nodes to search")
+        
+        min_distance = None
+        min_node = None
 
+        # Формируем приоритетную очередь по принципу
+        # "чем ближе прямоугольник узла к данной
+        # точке - тем лучше".
         queue = PriorityQueue()
-
-        if self.root.point != point:
-            # Начальное приближение - корневой узел:
-            min_distance = self.root.distanceTo(point)
-            min_node = self.root
-            # Формируем приоритетную очередь по принципу "чем ближе
-            # прямоугольник узла к заданной точке, тем приоритетнее"
-            queue.put((0, 0, self.root))
-        else:
-            children = [child for child in (self.root.left, self.root.right) if child is not None]
-            distances = [(child.distanceTo(point), child) for child in children]
-            min_distance, min_node = min(distances, key=lambda x:x[0])
-            for child in children:
-                queue.put((child.rect.distanceTo(point), random.random(), child))
+        queue.put((0, self.root)) # начинаем обход с корневого узла
 
         while not queue.empty():
-            prior, rand, node = queue.get()
+            dist_to_rect, node = queue.get()
 
-            # Условие обрезания ветви - если уже известна точка,
-            # которая ближе к заданной точке, чем прямоугольник
-            # узла:
-            if node.rect.distanceTo(point) > min_distance:
+            dist_to_point = node.distanceTo(point)
+            if dist_to_point > 0 and (min_distance is None or dist_to_point < min_distance):
+                min_distance = dist_to_point
+                min_node = node
+            elif min_distance is not None and dist_to_rect > min_distance:
+                # Условие отсечения ветви поиска: если
+                # все потомки данного узла заведомо
+                # дальше от исходой точки, чем уже
+                # найденный ближайший узел
                 continue
+
             for child in (node.left, node.right):
                 if child is None:
                     continue
-                dist = child.distanceTo(point)
-                if 0 < dist < min_distance:
-                    min_distance = dist
-                    min_node = child
-                queue.put((child.rect.distanceTo(point), random.random(), child)) 
+                queue.put((child.rect.distanceTo(point), child))
         return min_node, min_distance
 
     def _rangeSearch(self, rect):
@@ -160,7 +153,15 @@ class Node:
             self.rect = Rectangle() # бесконечный прямоугольник
         self.left = None # левый дочерний узел
         self.right = None # правый дочерний узел
-        self.radius = None # радиус узла (задаётся на уровне Kd-Tree)
+    
+    def __lt__(self, other):
+        '''
+            Сравнить два узла по координатам их точек.
+            Метод нужен для корректной работы PriorityQueue.
+        '''
+        if not isinstance(other, Node):
+            raise ValueError("Unorderable types: Node() < {}()".format(other.__class__.__name__))
+        return self.coord < other.coord
     
     def next(self, point):
         '''
@@ -206,6 +207,7 @@ class Rectangle:
         Класс, реализующий прямоугольную область на плоскости.
         Область может быть ограничена менее, чем с четырёх сторон.
     '''
+    
     def __init__(self, coords=None):
         '''
             coords - список отрезков, ограничивающих область
