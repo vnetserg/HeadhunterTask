@@ -57,6 +57,36 @@ def radius_and_neighbors_naive(points):
         result[point] = (radius, neighbors)
     return result
 
+def mismatches(points):
+    '''
+        Сопоставить результаты, поулчаемые на данном наборе
+        точек методом KdTree и наивным методом. При
+        возникновении несоответствий записать их в
+        словарь в формате
+            {точка: ((радиус1, соседи1),(радиус2, соседи2))}
+        и вернуть этот словарь. Аргументы:
+            points - список кортежей (x,y)
+    '''
+    errs = {}
+    res1 = radius_and_neighbors_naive(points)
+    res2 = radius_and_neighbors_tree(points)
+    for point in points:
+        if res1[point] != res2[point]:
+            errs[point] = (res1[point], res2[point])
+    return errs
+
+def minimum_error_set(points):
+    '''
+        Вернуть минимальной длины список точек,
+        в котором наблюдаются несоответствия между
+        результатами метода KdTree и наивного
+        метода.
+    '''
+    while mismatches(points):
+        last = list(points)
+        points.remove(random.choice(points))
+    return last
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("file", help="file with list of points", type=str)
@@ -64,11 +94,17 @@ def main():
     points = parse_file(args.file)
     if not points:
         return
-    res1 = radius_and_neighbors_naive(points)
-    res2 = radius_and_neighbors_tree(points)
-    for point in points:
-        assert res1[point] == res2[point]
-    print("OK")
+    if len(mismatches(points)) == 0:
+        print("OK")
+    else:
+        errset = minimum_error_set(points)
+        errs = mismatches(errset)
+        txt = "\n".join(["{} {}".format(*p) for p in errset])
+        with open("minerr.txt", "w") as f:
+            f.write(txt)
+        print("ERROR. Minimum error set written to 'minerr.txt'. Length: {}".format(len(errset)))
+        print("MISMATCHES: {}".format("; ".join(["{}: {} vs {}".format(pt, res1, res2)
+            for pt, (res1, res2) in errs.items()])))
 
 if __name__ == "__main__":
     main()

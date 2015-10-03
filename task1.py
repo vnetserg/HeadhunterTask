@@ -40,14 +40,10 @@ class KdTree:
             Добавить точку в структуру данных. Аргументы:
                 point - кортеж координат (x,y)
         '''
-        if self.root == None:
+        if self.root is None:
             self.root = Node(point)
         else:
-            closest, distance = self._closestNeighbor(point)
-            new = self._findNode(point).addLeaf(point)
-            if closest.radius is None or closest.radius > distance:
-                closest.radius = distance
-            new.radius = distance
+            self._findNode(point).addLeaf(point)
 
     def getRadiusAndNeighbors(self, point):
         '''
@@ -58,11 +54,12 @@ class KdTree:
         node = self._findNode(point)
         if node.point != point:
             raise ValueError("Point not in tree")
+        closest, radius = self._closestNeighbor(node.point)
         all_points = self._rangeSearch(Rectangle.centeredIn(
-            point, 4*node.radius, 4*node.radius))
+            point, 4*radius, 4*radius))
         neighbors = [point for point in all_points
-            if node.radius <= node.distanceTo(point) <= 2*node.radius]
-        return node.radius, len(neighbors)
+            if radius <= node.distanceTo(point) <= 2*radius]
+        return radius, len(neighbors)
 
     def _findNode(self, point):
         '''
@@ -90,16 +87,25 @@ class KdTree:
         if self.root is None:
             raise ValueError("No nodes to search")
 
-        # Начальное приближение - корневой узел:
-        min_distance = self.root.distanceTo(point)
-        min_node = self.root
-
-        # Формируем приоритетную очередь по принципу "чем ближе
-        # прямоугольник узла к заданной точке, тем приоритетнее"
         queue = PriorityQueue()
-        queue.put((0, self.root))
+
+        if self.root.point != point:
+            # Начальное приближение - корневой узел:
+            min_distance = self.root.distanceTo(point)
+            min_node = self.root
+            # Формируем приоритетную очередь по принципу "чем ближе
+            # прямоугольник узла к заданной точке, тем приоритетнее"
+            queue.put((0, 0, self.root))
+        else:
+            children = [child for child in (self.root.left, self.root.right) if child is not None]
+            distances = [(child.distanceTo(point), child) for child in children]
+            min_distance, min_node = min(distances, key=lambda x:x[0])
+            for child in children:
+                queue.put((child.rect.distanceTo(point), random.random(), child))
+
         while not queue.empty():
-            prior, node = queue.get()
+            prior, rand, node = queue.get()
+
             # Условие обрезания ветви - если уже известна точка,
             # которая ближе к заданной точке, чем прямоугольник
             # узла:
@@ -109,10 +115,10 @@ class KdTree:
                 if child is None:
                     continue
                 dist = child.distanceTo(point)
-                if dist < min_distance:
+                if 0 < dist < min_distance:
                     min_distance = dist
                     min_node = child
-                queue.put((child.rect.distanceTo(point), child))
+                queue.put((child.rect.distanceTo(point), random.random(), child)) 
         return min_node, min_distance
 
     def _rangeSearch(self, rect):
@@ -243,7 +249,7 @@ class Rectangle:
             x = point[0]
         if self.coords[1][0] is not None and point[1] < self.coords[1][0]:
             y = self.coords[1][0]
-        elif self.coords[1][1] is not None and self.coords[1][1] > point[1]:
+        elif self.coords[1][1] is not None and self.coords[1][1] < point[1]:
             y = self.coords[1][1]
         else:
             y = point[1]
@@ -255,19 +261,18 @@ class Rectangle:
             и False в противном случае. Аргументы:
                 rect - объект Rectangle
         '''
-        # Специальный случай - два бесконечных прямоугольника:
-        is_infinite = lambda rect: not any(any(crd for crd in pair) for pair in rect.coords)
-        if is_infinite(self) and is_infinite(rect):
-            return True
-        # Общий случай - прямоугольники пересекаются, если угол
-        # одного из них лежит внутри другого:
-        for corner in self._corners():
-            if rect.hasInside(corner):
+        def segments_intersect(seg1, seg2):
+            # Пересекаются ли два отрезка
+            if seg1 == (None, None) == seg2:
                 return True
-        for corner in rect._corners():
-            if self.hasInside(corner):
-                return True
-        return False
+            for first, second in [(seg1, seg2), (seg2, seg1)]:
+                x1, x2 = first
+                for vertex in second:
+                    if vertex is not None and (x1 is None or x1 <= vertex) and (x2 is None or vertex <= x2):
+                        return True
+            return False
+        return segments_intersect(self.coords[0], rect.coords[0]) and \
+            segments_intersect(self.coords[1], rect.coords[1])
 
     def hasInside(self, point):
         '''
@@ -295,16 +300,6 @@ class Rectangle:
         r2 = Rectangle([self.coords[crd] if crd != coord
                         else (value, self.coords[crd][1]) for crd in range(2)])
         return r1, r2
-
-    def _corners(self):
-        '''
-            Вернуть все углы данного прямоугольника.
-        '''
-        for x in self.coords[0]:
-            if x is None: continue
-            for y in self.coords[1]:
-                if y is None: continue
-                yield (x, y)
 
 def parse_file(file):
     '''
